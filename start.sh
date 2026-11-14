@@ -1,11 +1,26 @@
 #!/bin/bash
 
-if [ "${#PASSWORD}" -lt 6 ]; then
-  PASSWORD="$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+mkpass() { head -c 64 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 8; }
+
+# ---------- Password (VNC dan root asing) ----------
+VPW="${VNC_PASSWORD:-$PASSWORD}"
+RPW="${ROOT_PASSWORD:-$PASSWORD}"
+
+if [ "${#VPW}" -lt 6 ]; then
+  VPW="$(mkpass)"
   echo "=============================================="
-  echo "PASSWORD kosong/pendek. Password acak: $PASSWORD"
+  echo "VNC_PASSWORD kosong/pendek. VNC password acak: $VPW"
   echo "=============================================="
 fi
+VPW="${VPW:0:8}"
+
+if [ -z "$RPW" ]; then
+  RPW="$(mkpass)"
+  echo "=============================================="
+  echo "ROOT_PASSWORD kosong. Root password acak: $RPW"
+  echo "=============================================="
+fi
+
 RESOLUTION="${RESOLUTION:-1280x720}"
 PORT="${PORT:-6080}"
 
@@ -23,16 +38,30 @@ if [ -n "$SSH_PUBLIC_KEY" ]; then
   echo "$SSH_PUBLIC_KEY" > "$HOME/.ssh/authorized_keys"
   chmod 600 "$HOME/.ssh/authorized_keys"
 fi
-echo "root:$PASSWORD" | chpasswd
+echo "root:$RPW" | chpasswd
 printf 'PermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication yes\n' > /etc/ssh/sshd_config.d/railway.conf
 /usr/sbin/sshd || echo "[warn] sshd gagal start"
 
-# ---------- VNC ----------
-echo "[start] Xvnc"
-echo "${PASSWORD:0:8}" | vncpasswd -f > "$HOME/.vnc/passwd"
+# ---------- VNC password file ----------
+echo "[start] VNC password"
+rm -f "$HOME/.vnc/passwd"
+echo "$VPW" | vncpasswd -f > "$HOME/.vnc/passwd" 2>/tmp/vncpw.err
+if [ ! -s "$HOME/.vnc/passwd" ]; then
+  echo "[warn] cara 1 gagal, cuba cara 2"
+  printf '%s\n%s\nn\n' "$VPW" "$VPW" | vncpasswd "$HOME/.vnc/passwd" >>/tmp/vncpw.err 2>&1
+fi
 chmod 600 "$HOME/.vnc/passwd"
-rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+echo "[vnc] saiz fail passwd: $(stat -c %s "$HOME/.vnc/passwd" 2>/dev/null || echo 0) bait"
+cat /tmp/vncpw.err
+if [ ! -s "$HOME/.vnc/passwd" ]; then
+  echo "[error] fail password VNC kosong, tidak dijalankan tanpa password"
+  sleep 3600
+  exit 1
+fi
 
+# ---------- Xvnc ----------
+echo "[start] Xvnc"
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
 Xvnc :1 -geometry "$RESOLUTION" -depth 24 \
   -rfbport 5901 -localhost \
   -rfbauth "$HOME/.vnc/passwd" \

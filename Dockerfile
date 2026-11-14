@@ -31,5 +31,5 @@ RUN ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html \
 COPY start.sh /start.sh
 RUN sed -i 's/\r$//' /start.sh && chmod +x /start.sh
 
-EXPOSE 22
+EXPOSE 6080
 CMD ["/start.sh"]

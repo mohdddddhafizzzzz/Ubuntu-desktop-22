@@ -1,9 +1,9 @@
 #!/bin/bash
 
-if [ -z "$PASSWORD" ]; then
-  PASSWORD="$(head -c 12 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 12)"
+if [ "${#PASSWORD}" -lt 6 ]; then
+  PASSWORD="$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   echo "=============================================="
-  echo "PASSWORD tidak diset. Password acak: $PASSWORD"
+  echo "PASSWORD kosong/pendek. Password acak: $PASSWORD"
   echo "=============================================="
 fi
 RESOLUTION="${RESOLUTION:-1280x720}"
@@ -29,7 +29,7 @@ printf 'PermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication ye
 
 # ---------- VNC ----------
 echo "[start] Xvnc"
-echo "$PASSWORD" | vncpasswd -f > "$HOME/.vnc/passwd"
+echo "${PASSWORD:0:8}" | vncpasswd -f > "$HOME/.vnc/passwd"
 chmod 600 "$HOME/.vnc/passwd"
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
 
@@ -50,6 +50,5 @@ dbus-launch --exit-with-session startxfce4 &
 echo "[start] websockify di port $PORT"
 websockify --web=/usr/share/novnc "$PORT" localhost:5901
 
-# kalau sampai sini, websockify mati: tahan container supaya log bisa dibaca
 echo "[error] websockify berhenti"
 sleep 3600
